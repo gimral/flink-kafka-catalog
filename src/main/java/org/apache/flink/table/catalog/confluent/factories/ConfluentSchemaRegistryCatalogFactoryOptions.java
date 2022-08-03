@@ -4,6 +4,8 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 
 public class ConfluentSchemaRegistryCatalogFactoryOptions {
+    public static final String IDENTIFIER = "confluent-schema-registry";
+
     public static final String KAFKA_PREFIX = "kafka.";
     public static final String SCHEMA_REGISTRY_PREFIX = "schema.registry.";
     public static final String SCAN_PREFIX = "scan.";

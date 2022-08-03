@@ -1,29 +1,27 @@
 package org.apache.flink.table.catalog.confluent;
 
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.flink.formats.avro.typeutils.AvroSchemaConverter;
 import org.apache.flink.formats.json.JsonRowSchemaConverter;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.streaming.connectors.kafka.table.KafkaDynamicTableFactory;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.*;
 import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
+import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
 import org.apache.flink.table.catalog.exceptions.*;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.factories.Factory;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.utils.DataTypeUtils;
-import org.apache.flink.table.types.utils.TypeConversions;
+import org.apache.flink.table.types.utils.LegacyTypeInfoDataTypeConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -51,9 +49,16 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         Map<String, String> schemaRegistryProperties = properties.entrySet().stream()
                 .filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_PREFIX))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        String baseURLs = schemaRegistryProperties.get(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI);
-        schemaRegistryClient = new CachedSchemaRegistryClient(baseURLs,DEFAULT_CACHE_SIZE,schemaRegistryProperties);
+        List<String> baseURLs = Arrays.asList(schemaRegistryProperties.get(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key())
+                .split(","));
+        SchemaRegistryClientFactory sf = new SchemaRegistryClientFactory();
+        schemaRegistryClient = sf.get(baseURLs,DEFAULT_CACHE_SIZE,schemaRegistryProperties);
         LOG.info("Created Confluent Schema Registry Catalog {}", name);
+    }
+
+    @Override
+    public Optional<Factory> getFactory() {
+        return Optional.of(new KafkaDynamicTableFactory());
     }
 
     @Override
@@ -130,28 +135,36 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
         try {
             SchemaMetadata latestSchemaMetadata = schemaRegistryClient.getLatestSchemaMetadata(topic);
-            ResolvedSchema resolvedSchema = getTableSchema(latestSchemaMetadata);
-            return new CatalogTableImpl(TableSchema.fromResolvedSchema(resolvedSchema),
-                    getTableProperties(topic,latestSchemaMetadata.getSchemaType()), "");
+            Schema schema = getTableSchema(latestSchemaMetadata);
+            return CatalogTable.of(schema,"",new ArrayList<>(),
+                    getTableProperties(topic,latestSchemaMetadata.getSchemaType()));
+//            return new CatalogTableImpl(Schema.newBuilder().fromResolvedSchema(resolvedSchema).build(),
+//                    getTableProperties(topic,latestSchemaMetadata.getSchemaType()), "");
         } catch (Exception e) {
             LOG.error("Error while accessing table " + tablePath + " : " + ExceptionUtils.getStackTrace(e));
             throw new TableNotExistException(this.getName(), tablePath);
         }
     }
 
-    private ResolvedSchema getTableSchema(SchemaMetadata schemaMetadata) {
+    private Schema getTableSchema(SchemaMetadata schemaMetadata) {
         DataType dataType;
         switch (schemaMetadata.getSchemaType()){
             case "JSON":
-                dataType = TypeConversions.fromLegacyInfoToDataType(JsonRowSchemaConverter.convert(schemaMetadata.getSchema()));
+                //noinspection deprecation
+                dataType = LegacyTypeInfoDataTypeConverter.toDataType(JsonRowSchemaConverter.convert(schemaMetadata.getSchema()));
                 break;
             case "AVRO":
-                dataType = TypeConversions.fromLegacyInfoToDataType(AvroSchemaConverter.convertToTypeInfo(schemaMetadata.getSchema()));
+                dataType = AvroSchemaConverter.convertToDataType(schemaMetadata.getSchema());
                 break;
             default:
                 throw new NotImplementedException("Not supporting serialization format");
         }
-        return DataTypeUtils.expandCompositeTypeToSchema(dataType);
+
+//        RowTypeInfo rowType = (RowTypeInfo)AvroSchemaConverter.convertToDataType(schemaMetadata.getSchema());
+//        FieldsDataType rowDataType = (FieldsDataType)AvroSchemaConverter.convertToDataType(schemaText);
+//        return TableSchema.builder().fields(rowType.getFieldNames(), (DataType[])rowDataType.getChildren().toArray(new DataType[0])).build();
+
+        return Schema.newBuilder().fromRowDataType(dataType).build();
     }
 
     protected Map<String, String> getTableProperties(String topic, String type) {
@@ -163,7 +176,7 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         if("JSON".equalsIgnoreCase(type))
             props.put("format","json");
         else if("AVRO".equalsIgnoreCase(type))
-            props.put("format", "avro");
+            props.put("format", "avro-confluent");
         else
             throw new NotImplementedException("Not supporting format");
 

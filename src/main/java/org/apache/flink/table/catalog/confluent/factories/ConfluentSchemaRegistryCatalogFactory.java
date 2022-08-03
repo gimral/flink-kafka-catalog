@@ -14,6 +14,11 @@ public class ConfluentSchemaRegistryCatalogFactory implements CatalogFactory {
     public ConfluentSchemaRegistryCatalogFactory() {
     }
 
+    @Override
+    public String factoryIdentifier() {
+        return ConfluentSchemaRegistryCatalogFactoryOptions.IDENTIFIER;
+    }
+
     public Set<ConfigOption<?>> requiredOptions() {
         final Set<ConfigOption<?>> options = new HashSet<>();
         options.add(ConfluentSchemaRegistryCatalogFactoryOptions.BOOTSTRAP_SERVERS);
