@@ -80,7 +80,7 @@ public class ConfluentSchemaRegistryCatalogIntegrationTest {
         tableEnv.executeSql("INSERT INTO " + table2Identifier + "\n" +
                 "SELECT name,age\n" +
                 "FROM (VALUES\n" +
-                "('Abcd','30'))\n" +
+                "('Abcd',30))\n" +
                 "AS t(name, age)");
 
         tableEnv.executeSql("INSERT INTO " + table2_targetIdentifier + "\n" +

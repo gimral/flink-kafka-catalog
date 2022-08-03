@@ -8,7 +8,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.flink.table.catalog.ObjectPath;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -50,10 +49,10 @@ public class CatalogTestUtil {
             "    },\n" +
             "    \"age\": {\n" +
             "      \"description\": \"Age in years.\",\n" +
-            "      \"type\": \"string\"\n" +
+            "      \"type\": \"integer\"\n" +
             "    }\n" +
             "  }\n" +
             "}"
     );
-    public final static String table2Message = "{\"name\":\"Abcd\",\"age\":\"30\"}";
+    public final static String table2Message = "{\"name\":\"Abcd\",\"age\":30}";
 }

@@ -1,23 +1,25 @@
 package org.apache.flink.table.catalog.confluent;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.flink.formats.avro.typeutils.AvroSchemaConverter;
-import org.apache.flink.formats.json.JsonRowSchemaConverter;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaDynamicTableFactory;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.*;
 import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
 import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
+import org.apache.flink.table.catalog.confluent.json.JsonSchemaConverter;
 import org.apache.flink.table.catalog.exceptions.*;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.factories.Factory;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.utils.LegacyTypeInfoDataTypeConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -136,33 +138,34 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         try {
             SchemaMetadata latestSchemaMetadata = schemaRegistryClient.getLatestSchemaMetadata(topic);
             Schema schema = getTableSchema(latestSchemaMetadata);
+            if(schema == null)
+                throw new TableNotExistException(this.getName(), tablePath);
             return CatalogTable.of(schema,"",new ArrayList<>(),
                     getTableProperties(topic,latestSchemaMetadata.getSchemaType()));
-//            return new CatalogTableImpl(Schema.newBuilder().fromResolvedSchema(resolvedSchema).build(),
-//                    getTableProperties(topic,latestSchemaMetadata.getSchemaType()), "");
         } catch (Exception e) {
             LOG.error("Error while accessing table " + tablePath + " : " + ExceptionUtils.getStackTrace(e));
             throw new TableNotExistException(this.getName(), tablePath);
         }
     }
 
-    private Schema getTableSchema(SchemaMetadata schemaMetadata) {
+    private Schema getTableSchema(SchemaMetadata schemaMetaData) {
         DataType dataType;
-        switch (schemaMetadata.getSchemaType()){
+        switch (schemaMetaData.getSchemaType()){
             case "JSON":
-                //noinspection deprecation
-                dataType = LegacyTypeInfoDataTypeConverter.toDataType(JsonRowSchemaConverter.convert(schemaMetadata.getSchema()));
+                Optional<ParsedSchema> parsedSchema = schemaRegistryClient.parseSchema(
+                        schemaMetaData.getSchemaType(), schemaMetaData.getSchema(), schemaMetaData.getReferences());
+                if(!parsedSchema.isPresent()){
+                    LOG.error("Not able to parse the schema");
+                    return null;
+                }
+                dataType = JsonSchemaConverter.convertToDataType((JsonSchema)parsedSchema.get());
                 break;
-            case "AVRO":
-                dataType = AvroSchemaConverter.convertToDataType(schemaMetadata.getSchema());
+            case AvroSchema.TYPE:
+                dataType = AvroSchemaConverter.convertToDataType(schemaMetaData.getSchema());
                 break;
             default:
                 throw new NotImplementedException("Not supporting serialization format");
         }
-
-//        RowTypeInfo rowType = (RowTypeInfo)AvroSchemaConverter.convertToDataType(schemaMetadata.getSchema());
-//        FieldsDataType rowDataType = (FieldsDataType)AvroSchemaConverter.convertToDataType(schemaText);
-//        return TableSchema.builder().fields(rowType.getFieldNames(), (DataType[])rowDataType.getChildren().toArray(new DataType[0])).build();
 
         return Schema.newBuilder().fromRowDataType(dataType).build();
     }

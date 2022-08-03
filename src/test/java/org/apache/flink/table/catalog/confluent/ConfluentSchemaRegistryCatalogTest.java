@@ -2,21 +2,18 @@ package org.apache.flink.table.catalog.confluent;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
 import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
-import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.apache.flink.table.catalog.confluent.CatalogTestUtil.*;
 import static org.junit.Assert.*;
@@ -85,26 +82,25 @@ public class ConfluentSchemaRegistryCatalogTest {
     @Test
     public void testAvroGetTable() throws TableNotExistException {
         CatalogTable table = (CatalogTable) catalog.getTable(table1Path);
-        //noinspection deprecation
-        TableSchema schema = table.getSchema();
+        Schema schema = table.getUnresolvedSchema();
         Map<String, String> options = table.getOptions();
         assertEquals("avro-confluent",options.get("format"));
         assertEquals(table1,options.get("topic"));
         assertEquals("kafka",options.get("connector"));
-        assertTrue(schema.getTableColumn("a").isPresent());
-        assertEquals(LogicalTypeRoot.VARCHAR,schema.getTableColumn("a").get().getType().getLogicalType().getTypeRoot());
+        assertEquals(2,schema.getColumns().size());
+        Optional<Schema.UnresolvedColumn> column = schema.getColumns().stream().filter(c -> Objects.equals(c.getName(), "name")).findFirst();
+        assertTrue(column.isPresent());
     }
 
     @Test
     public void testJsonGetTable() throws TableNotExistException {
         CatalogTable table = (CatalogTable) catalog.getTable(table2Path);
-        //noinspection deprecation
-        TableSchema schema = table.getSchema();
+        Schema schema = table.getUnresolvedSchema();
         Map<String, String> options = table.getOptions();
         assertEquals("json",options.get("format"));
         assertEquals(table2,options.get("topic"));
         assertEquals("kafka",options.get("connector"));
-        assertTrue(schema.getTableColumn("firstName").isPresent());
-        assertEquals(LogicalTypeRoot.VARCHAR,schema.getTableColumn("firstName").get().getType().getLogicalType().getTypeRoot());
+        assertEquals(2,schema.getColumns().size());
+        Optional<Schema.UnresolvedColumn> column = schema.getColumns().stream().filter(c -> Objects.equals(c.getName(), "firstName")).findFirst();
     }
 }
