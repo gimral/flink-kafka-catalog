@@ -40,7 +40,7 @@ public class CatalogTestUtil {
     public final static String table2Identifier = "`" + CATALOG_NAME + "`.`" + ConfluentSchemaRegistryCatalog.DEFAULT_DB + "`." + table2;
     public final static String table2_targetIdentifier = "`" + CATALOG_NAME + "`.`" + ConfluentSchemaRegistryCatalog.DEFAULT_DB + "`." + table2_target;
     public final static JsonSchema table2JsonSchema = new JsonSchema("{\n" +
-            "  \"title\": \""+table2+"\",\n" +
+            "  \"title\": \"" + table2 + "\",\n" +
             "  \"type\": \"object\",\n" +
             "  \"properties\": {\n" +
             "    \"name\": {\n" +
@@ -50,9 +50,61 @@ public class CatalogTestUtil {
             "    \"age\": {\n" +
             "      \"description\": \"Age in years.\",\n" +
             "      \"type\": \"integer\"\n" +
+            "    },\n" +
+            "    \"birthDate\" : {\n" +
+            "      \"type\": \"string\",\n" +
+            "      \"format\": \"date\"\n" +
+            "    },\n" +
+            "    \"createTime\" : {\n" +
+            "      \"type\": \"string\",\n" +
+            "      \"format\": \"date-time\"\n" +
+            "    },\n" +
+            "    \"location\": {\n" +
+            "      \"title\": \"Location\",\n" +
+            "      \"description\": \"Location\",\n" +
+            "      \"type\": \"object\",\n" +
+            "      \"properties\": {\n" +
+            "        \"latitude\": {\n" +
+            "          \"type\": \"number\",\n" +
+            "          \"minimum\": -90,\n" +
+            "          \"maximum\": 90\n" +
+            "        },\n" +
+            "        \"longitude\": {\n" +
+            "          \"type\": \"number\",\n" +
+            "          \"minimum\": -180,\n" +
+            "          \"maximum\": 180\n" +
+            "        },\n" +
+            "        \"city\": {\n" +
+            "          \"title\": \"City\",\n" +
+            "           \"description\": \"City\",\n" +
+            "           \"type\": \"object\",\n" +
+            "           \"properties\": {\n" +
+            "             \"name\": {\n" +
+            "              \"type\": \"string\"\n" +
+            "              },\n" +
+            "             \"country\": {\n" +
+            "               \"type\": \"string\"\n" +
+            "             }\n" +
+            "           }\n" +
+            "        },\n" +
+            "        \"fruits\": {\n" +
+            "          \"type\": \"array\",\n" +
+            "          \"items\": {\n" +
+            "            \"type\": \"object\",\n" +
+            "            \"properties\": {\n" +
+            "              \"family\": {\n" +
+            "                \"type\": \"string\"\n" +
+            "              },\n" +
+            "              \"name\": {\n" +
+            "                \"type\": \"string\"\n" +
+            "              }\n" +
+            "            }\n" +
+            "          }\n" +
+            "        }\n" +
+            "      }\n" +
             "    }\n" +
             "  }\n" +
             "}"
     );
-    public final static String table2Message = "{\"name\":\"Abcd\",\"age\":30}";
+    public final static String table2Message = "{\"name\":\"Abcd\",\"age\":30,\"birthDate\":\"1985-01-01\",\"createTime\":\"2022-08-04 19:00:00\",\"location\":{\"latitude\":24.3,\"longitude\":25.4,\"city\":{\"name\":\"istanbul\",\"country\":\"turkiye\"},\"fruits\":[{\"family\":\"pome\",\"name\":\"apple\"},{\"family\":\"pome\",\"name\":\"apple\"}]}}";
 }
