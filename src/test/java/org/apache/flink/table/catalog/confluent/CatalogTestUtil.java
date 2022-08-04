@@ -42,9 +42,10 @@ public class CatalogTestUtil {
     public final static JsonSchema table2JsonSchema = new JsonSchema("{\n" +
             "  \"title\": \"" + table2 + "\",\n" +
             "  \"type\": \"object\",\n" +
+            "  \"required\": [\"name\",\"age\"],  \n" +
             "  \"properties\": {\n" +
             "    \"name\": {\n" +
-            "      \"type\": \"string\",\n" +
+            "      \"type\": [\"string\",\"null\"],\n" +
             "      \"description\": \"The name.\"\n" +
             "    },\n" +
             "    \"age\": {\n" +

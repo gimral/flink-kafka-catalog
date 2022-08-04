@@ -96,8 +96,11 @@ public class ConfluentSchemaRegistryCatalogIntegrationTest {
                 "        ('Abcd',30,24.3,25.4,'istanbul','turkiye'))\n" +
                 "AS t(name, age,latitude,longitude,city_name,country))");
 
-        tableEnv.executeSql("INSERT INTO " + table2_targetIdentifier + "\n" +
-                "SELECT *\n" +
+//        tableEnv.executeSql("INSERT INTO " + table2_targetIdentifier + "\n" +
+//                "SELECT *\n" +
+//                "FROM " + table2Identifier);
+        tableEnv.executeSql("INSERT INTO " + table2_targetIdentifier + "(name,age,birthDate,createTime,location)\n" +
+                "SELECT name,age,birthDate,createTime,location\n" +
                 "FROM " + table2Identifier);
 
         String record1 = kafkaOps.consumeFirstStringMessageFrom(table2, false, Duration.create(120, TimeUnit.SECONDS), kafkaConfig);

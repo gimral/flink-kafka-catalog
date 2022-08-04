@@ -2,8 +2,11 @@ package org.apache.flink.table.catalog.confluent.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.types.AtomicDataType;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.TypeInformationRawType;
 import org.apache.flink.util.Preconditions;
 
 import java.util.ArrayList;
@@ -23,7 +26,39 @@ public class JsonSchemaConverter {
     }
 
     private static DataType convertToDataType(JsonNode node) {
-        String type = node.get("type").asText("");
+        String type;
+        if(node.isTextual())
+            type = node.asText();
+        else {
+            JsonNode typeNode = node.get("type");
+            //Composite schema
+            if (typeNode.isArray()) {
+                List<JsonNode> types = new ArrayList<>();
+                typeNode.elements().forEachRemaining(types::add);
+                JsonNode actualNode;
+                boolean nullable;
+                if (types.size() == 2 && types.get(0).isTextual() && Objects.equals(types.get(0).asText(), "null")) {
+                    actualNode = types.get(1);
+                    nullable = true;
+                } else if (types.size() == 2 && types.get(1).isTextual() && Objects.equals(types.get(1).asText(), "null")) {
+                    actualNode = types.get(0);
+                    nullable = true;
+                } else {
+                    if (types.size() != 1) //noinspection RedundantSuppression
+                    {
+                        //noinspection unchecked,deprecation,rawtypes
+                        return new AtomicDataType(new TypeInformationRawType(false, Types.GENERIC(Object.class)));
+                    }
+
+                    actualNode = types.get(0);
+                    nullable = false;
+                }
+
+                DataType converted = convertToDataType(actualNode);
+                return nullable ? converted.nullable() : converted;
+            }
+            type = typeNode.asText("");
+        }
         switch(type) {
             case "object":
                 if(!node.has("properties"))
@@ -31,10 +66,19 @@ public class JsonSchemaConverter {
                 JsonNode properties = node.get("properties");
                 List<Map.Entry<String, JsonNode>> schemaFields = new ArrayList<>();
                 properties.fields().forEachRemaining(schemaFields::add);
+
+                List<String> requiredFields = new ArrayList<>();
+                if(node.has("required")) {
+                    JsonNode required = node.get("required");
+                    required.elements().forEachRemaining(r -> requiredFields.add(r.asText()));
+                }
                 DataTypes.Field[] fields = new DataTypes.Field[schemaFields.size()];
                 for (int i = 0; i < schemaFields.size(); ++i) {
                     Map.Entry<String, JsonNode> field = schemaFields.get(i);
-                    fields[i] = DataTypes.FIELD(field.getKey(), convertToDataType(field.getValue()));
+                    DataType dataType = convertToDataType(field.getValue());
+                    if(!requiredFields.contains(field.getKey()))
+                        dataType = dataType.nullable();
+                    fields[i] = DataTypes.FIELD(field.getKey(), dataType);
                 }
                 return DataTypes.ROW(fields).notNull();
 
@@ -44,26 +88,6 @@ public class JsonSchemaConverter {
                 return DataTypes.ARRAY(convertToDataType(node.get("items"))).notNull();
 //            case MAP:
 //                return (DataType)DataTypes.MAP((DataType)DataTypes.STRING().notNull(), convertToDataType(schema.getValueType())).notNull();
-//            case UNION:
-//                Schema actualSchema;
-//                boolean nullable;
-//                if (schema.getTypes().size() == 2 && ((Schema)schema.getTypes().get(0)).getType() == Schema.Type.NULL) {
-//                    actualSchema = (Schema)schema.getTypes().get(1);
-//                    nullable = true;
-//                } else if (schema.getTypes().size() == 2 && ((Schema)schema.getTypes().get(1)).getType() == Schema.Type.NULL) {
-//                    actualSchema = (Schema)schema.getTypes().get(0);
-//                    nullable = true;
-//                } else {
-//                    if (schema.getTypes().size() != 1) {
-//                        return new AtomicDataType(new TypeInformationRawType(false, Types.GENERIC(Object.class)));
-//                    }
-//
-//                    actualSchema = (Schema)schema.getTypes().get(0);
-//                    nullable = false;
-//                }
-//
-//                DataType converted = convertToDataType(actualSchema);
-//                return nullable ? (DataType)converted.nullable() : converted;
             case "string":
                 if(node.has("format")){
                     String format = node.get("format").asText();
@@ -87,6 +111,7 @@ public class JsonSchemaConverter {
             case "null":
                 return DataTypes.NULL();
             default:
+
                 throw new IllegalArgumentException("Unsupported Json type '" + type + "'.");
         }
     }

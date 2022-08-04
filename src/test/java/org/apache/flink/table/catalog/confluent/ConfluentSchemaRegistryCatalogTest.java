@@ -101,6 +101,7 @@ public class ConfluentSchemaRegistryCatalogTest {
         assertEquals(table2,options.get("topic"));
         assertEquals("kafka",options.get("connector"));
         assertEquals(5,schema.getColumns().size());
-        Optional<Schema.UnresolvedColumn> column = schema.getColumns().stream().filter(c -> Objects.equals(c.getName(), "firstName")).findFirst();
+        Optional<Schema.UnresolvedColumn> column = schema.getColumns().stream().filter(c -> Objects.equals(c.getName(), "name")).findFirst();
+        assertTrue(column.isPresent());
     }
 }
