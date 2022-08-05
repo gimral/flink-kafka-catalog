@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent;
+package org.apache.flink.table.catalog.kafka;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
@@ -12,11 +12,11 @@ import org.apache.flink.streaming.connectors.kafka.table.KafkaDynamicTableFactor
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.*;
-import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
-import org.apache.flink.table.catalog.confluent.factories.KafkaAdminClientFactory;
-import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
-import org.apache.flink.table.catalog.confluent.json.JsonSchemaConverter;
-import org.apache.flink.table.catalog.confluent.schema.TopicSchema;
+import org.apache.flink.table.catalog.kafka.factories.KafkaCatalogFactoryOptions;
+import org.apache.flink.table.catalog.kafka.factories.KafkaAdminClientFactory;
+import org.apache.flink.table.catalog.kafka.factories.SchemaRegistryClientFactory;
+import org.apache.flink.table.catalog.kafka.json.JsonSchemaConverter;
+import org.apache.flink.table.catalog.kafka.schema.TopicSchema;
 import org.apache.flink.table.catalog.exceptions.*;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
@@ -37,28 +37,28 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 
-public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
+public class KafkaCatalog extends AbstractCatalog {
 
     public static final String DEFAULT_DB = "default";
     public static final int DEFAULT_CACHE_SIZE = 1000;
 
-    private static final Logger LOG = LoggerFactory.getLogger(ConfluentSchemaRegistryCatalog.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaCatalog.class);
     private final Map<String, String> properties;
 
     private SchemaRegistryClient schemaRegistryClient;
     private List<String> topics;
 
     private final KafkaAdminClientFactory kafkaAdminClientFactory;
-    public ConfluentSchemaRegistryCatalog(String name, Map<String, String> properties,KafkaAdminClientFactory kafkaAdminClientFactory) {
+    public KafkaCatalog(String name, Map<String, String> properties,KafkaAdminClientFactory kafkaAdminClientFactory) {
         this(name, DEFAULT_DB, properties, kafkaAdminClientFactory);
     }
 
-    public ConfluentSchemaRegistryCatalog(String name, String defaultDatabase, Map<String, String> properties,KafkaAdminClientFactory kafkaAdminClientFactory) {
+    public KafkaCatalog(String name, String defaultDatabase, Map<String, String> properties,KafkaAdminClientFactory kafkaAdminClientFactory) {
         super(name, defaultDatabase);
         this.properties = properties;
         this.kafkaAdminClientFactory = kafkaAdminClientFactory;
 
-        LOG.info("Created Confluent Schema Registry Catalog {}", name);
+        LOG.info("Created Kafka Catalog {}", name);
     }
 
     @Override
@@ -70,17 +70,16 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
     public void open() throws CatalogException {
 
         Map<String, String> schemaRegistryProperties = properties.entrySet().stream()
-                .filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_PREFIX))
+                .filter(p -> p.getKey().startsWith(KafkaCatalogFactoryOptions.SCHEMA_REGISTRY_PREFIX))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        List<String> baseURLs = Arrays.asList(schemaRegistryProperties.get(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key())
+        List<String> baseURLs = Arrays.asList(schemaRegistryProperties.get(KafkaCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key())
                 .split(","));
         SchemaRegistryClientFactory sf = new SchemaRegistryClientFactory();
         schemaRegistryClient = sf.get(baseURLs,DEFAULT_CACHE_SIZE,schemaRegistryProperties);
 
         Map<String, Object> kafkaProperties = properties.entrySet().stream()
-                .filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.KAFKA_PREFIX))
-                .collect(Collectors.toMap(p -> p.getKey().substring(ConfluentSchemaRegistryCatalogFactoryOptions.KAFKA_PREFIX.length()
-                                + "properties.".length())
+                .filter(p -> p.getKey().startsWith(KafkaCatalogFactoryOptions.KAFKA_PREFIX))
+                .collect(Collectors.toMap(p -> p.getKey().substring(KafkaCatalogFactoryOptions.KAFKA_PREFIX.length())
                         , Map.Entry::getValue));
         try (AdminClient client = kafkaAdminClientFactory.get(kafkaProperties)) {
             ListTopicsOptions options = new ListTopicsOptions();
@@ -119,17 +118,17 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
     @Override
     public void createDatabase(String databaseName, CatalogDatabase database, boolean ignoreIfExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void dropDatabase(String s, boolean b, boolean b1) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterDatabase(String s, CatalogDatabase catalogDatabase, boolean b) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
@@ -211,12 +210,12 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         props.put("scan.startup.mode", "latest-offset");
         props.put("format",type.getFormat());
 
-        properties.entrySet().stream().filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SCAN_PREFIX)
-                        || p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SINK_PREFIX))
+        properties.entrySet().stream().filter(p -> p.getKey().startsWith(KafkaCatalogFactoryOptions.SCAN_PREFIX)
+                        || p.getKey().startsWith(KafkaCatalogFactoryOptions.SINK_PREFIX))
                 .forEach(p -> props.put(p.getKey(),p.getValue()));
 
-        properties.entrySet().stream().filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.KAFKA_PREFIX))
-                .forEach(p -> props.put(p.getKey().substring(ConfluentSchemaRegistryCatalogFactoryOptions.KAFKA_PREFIX.length()),p.getValue()));
+        properties.entrySet().stream().filter(p -> p.getKey().startsWith(KafkaCatalogFactoryOptions.KAFKA_PREFIX))
+                .forEach(p -> props.put(p.getKey(),p.getValue()));
 
         return props;
     }
@@ -235,22 +234,22 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
     @Override
     public void dropTable(ObjectPath tablePath, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void renameTable(ObjectPath tablePath, String newTableName, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void createTable(ObjectPath tablePath, CatalogBaseTable table, boolean ignoreIfExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
@@ -280,17 +279,17 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
     @Override
     public void createPartition(ObjectPath tablePath, CatalogPartitionSpec partitionSpec, CatalogPartition partition, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void dropPartition(ObjectPath tablePath, CatalogPartitionSpec partitionSpec, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterPartition(ObjectPath tablePath, CatalogPartitionSpec partitionSpec, CatalogPartition partition, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
@@ -310,17 +309,17 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
     @Override
     public void createFunction(ObjectPath functionPath, CatalogFunction function, boolean ignoreIfExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterFunction(ObjectPath functionPath, CatalogFunction function, boolean ignoreIfExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void dropFunction(ObjectPath functionPath, boolean ignoreIfExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
@@ -345,21 +344,21 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
     @Override
     public void alterTableStatistics(ObjectPath tablePath, CatalogTableStatistics tableStatistics, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterTableColumnStatistics(ObjectPath tablePath, CatalogColumnStatistics columnStatistics, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterPartitionStatistics(ObjectPath tablePath, CatalogPartitionSpec partitionSpec, CatalogTableStatistics tableStatistics, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 
     @Override
     public void alterPartitionColumnStatistics(ObjectPath objectPath, CatalogPartitionSpec partitionSpec, CatalogColumnStatistics columnStatistics, boolean ignoreIfNotExists) throws CatalogException {
-        throw new UnsupportedOperationException("confluent Schema Registry only supports read operations");
+        throw new UnsupportedOperationException("Kafka only supports read operations");
     }
 }

@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent.factories;
+package org.apache.flink.table.catalog.kafka.factories;
 
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;

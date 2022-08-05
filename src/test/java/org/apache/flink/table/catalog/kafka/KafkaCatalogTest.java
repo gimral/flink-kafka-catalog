@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent;
+package org.apache.flink.table.catalog.kafka;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -6,9 +6,9 @@ import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
-import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
-import org.apache.flink.table.catalog.confluent.factories.KafkaAdminClientFactory;
-import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
+import org.apache.flink.table.catalog.kafka.factories.KafkaCatalogFactoryOptions;
+import org.apache.flink.table.catalog.kafka.factories.KafkaAdminClientFactory;
+import org.apache.flink.table.catalog.kafka.factories.SchemaRegistryClientFactory;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListTopicsResult;
@@ -18,15 +18,14 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
-import static org.apache.flink.table.catalog.confluent.CatalogTestUtil.*;
+import static org.apache.flink.table.catalog.kafka.CatalogTestUtil.*;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-public class ConfluentSchemaRegistryCatalogTest {
+public class KafkaCatalogTest {
 
-    private ConfluentSchemaRegistryCatalog catalog;
+    private KafkaCatalog catalog;
 
     @Before
     public void init() throws RestClientException, IOException {
@@ -37,7 +36,7 @@ public class ConfluentSchemaRegistryCatalogTest {
 
         Map<String, String> properties = new HashMap<>();
         properties.put("connector", "kafka");
-        properties.put(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key(), String.join(", ", SCHEMA_REGISTRY_URIS));
+        properties.put(KafkaCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key(), String.join(", ", SCHEMA_REGISTRY_URIS));
 
         KafkaAdminClientFactory mockAdminClientFactory = mock(KafkaAdminClientFactory.class);
         AdminClient mockAdminClient = mock(AdminClient.class);
@@ -45,7 +44,7 @@ public class ConfluentSchemaRegistryCatalogTest {
         when(mockListTopicsResult.names()).thenReturn(KafkaFuture.completedFuture(new HashSet<>(Arrays.asList(table1,table2))));
         when(mockAdminClient.listTopics(any())).thenReturn(mockListTopicsResult);
         when(mockAdminClientFactory.get(any())).thenReturn(mockAdminClient);
-        catalog = new ConfluentSchemaRegistryCatalog(CATALOG_NAME,properties, mockAdminClientFactory);
+        catalog = new KafkaCatalog(CATALOG_NAME,properties, mockAdminClientFactory);
         catalog.open();
     }
 
@@ -53,7 +52,7 @@ public class ConfluentSchemaRegistryCatalogTest {
 
     @Test
     public void testDefaultDBExists(){
-        assertTrue(catalog.databaseExists(ConfluentSchemaRegistryCatalog.DEFAULT_DB));
+        assertTrue(catalog.databaseExists(KafkaCatalog.DEFAULT_DB));
     }
 
     @Test
@@ -63,18 +62,18 @@ public class ConfluentSchemaRegistryCatalogTest {
 
     @Test
     public void testGetDbExist() throws Exception {
-        CatalogDatabase db = catalog.getDatabase(ConfluentSchemaRegistryCatalog.DEFAULT_DB);
+        CatalogDatabase db = catalog.getDatabase(KafkaCatalog.DEFAULT_DB);
         assertNotNull(db);
     }
 
     @Test(expected = TableNotExistException.class)
     public void testGetTableNotExist() throws Exception {
-        catalog.getTable(new ObjectPath(ConfluentSchemaRegistryCatalog.DEFAULT_DB, "NOT_EXIST"));
+        catalog.getTable(new ObjectPath(KafkaCatalog.DEFAULT_DB, "NOT_EXIST"));
     }
 
     @Test
     public void testListTables() throws Exception {
-        List<String> tables = catalog.listTables(ConfluentSchemaRegistryCatalog.DEFAULT_DB);
+        List<String> tables = catalog.listTables(KafkaCatalog.DEFAULT_DB);
 
         assertEquals(2, tables.size());
         assertTrue(tables.contains(table1));
@@ -89,7 +88,7 @@ public class ConfluentSchemaRegistryCatalogTest {
 
     @Test
     public void testTableNotExists() {
-        assertFalse(catalog.tableExists(new ObjectPath(ConfluentSchemaRegistryCatalog.DEFAULT_DB, "NOT_EXIST")));
+        assertFalse(catalog.tableExists(new ObjectPath(KafkaCatalog.DEFAULT_DB, "NOT_EXIST")));
     }
 
     @Test

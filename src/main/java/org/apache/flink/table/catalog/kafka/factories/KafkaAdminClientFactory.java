@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent.factories;
+package org.apache.flink.table.catalog.kafka.factories;
 
 import org.apache.kafka.clients.admin.AdminClient;
 

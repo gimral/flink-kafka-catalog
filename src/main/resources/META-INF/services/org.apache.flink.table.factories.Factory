@@ -1,1 +1,1 @@
-org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactory
+org.apache.flink.table.catalog.kafka.factories.KafkaCatalogFactory

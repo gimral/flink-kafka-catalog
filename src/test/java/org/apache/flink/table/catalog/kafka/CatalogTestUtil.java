@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent;
+package org.apache.flink.table.catalog.kafka;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -16,7 +16,7 @@ public class CatalogTestUtil {
     public final static String CATALOG_NAME = "kafka";
 
     public final static String table1 = "t1";
-    public final static ObjectPath table1Path = new ObjectPath(ConfluentSchemaRegistryCatalog.DEFAULT_DB, table1);
+    public final static ObjectPath table1Path = new ObjectPath(KafkaCatalog.DEFAULT_DB, table1);
     private final static Schema table1Schema = SchemaBuilder
             .record(table1)
             .fields()
@@ -36,9 +36,9 @@ public class CatalogTestUtil {
 
     public final static String table2 = "t2";
     public final static String table2_target = "table2_target";
-    public final static ObjectPath table2Path = new ObjectPath(ConfluentSchemaRegistryCatalog.DEFAULT_DB, table2);
-    public final static String table2Identifier = "`" + CATALOG_NAME + "`.`" + ConfluentSchemaRegistryCatalog.DEFAULT_DB + "`." + table2;
-    public final static String table2_targetIdentifier = "`" + CATALOG_NAME + "`.`" + ConfluentSchemaRegistryCatalog.DEFAULT_DB + "`." + table2_target;
+    public final static ObjectPath table2Path = new ObjectPath(KafkaCatalog.DEFAULT_DB, table2);
+    public final static String table2Identifier = "`" + CATALOG_NAME + "`.`" + KafkaCatalog.DEFAULT_DB + "`." + table2;
+    public final static String table2_targetIdentifier = "`" + CATALOG_NAME + "`.`" + KafkaCatalog.DEFAULT_DB + "`." + table2_target;
     public final static JsonSchema table2JsonSchema = new JsonSchema("{\n" +
             "  \"title\": \"" + table2 + "\",\n" +
             "  \"type\": \"object\",\n" +

@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent.json;
+package org.apache.flink.table.catalog.kafka.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;

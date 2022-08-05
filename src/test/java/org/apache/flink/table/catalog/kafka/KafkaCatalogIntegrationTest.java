@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent;
+package org.apache.flink.table.catalog.kafka;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -9,9 +9,9 @@ import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.catalog.Catalog;
-import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
-import org.apache.flink.table.catalog.confluent.factories.KafkaAdminClientFactory;
-import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
+import org.apache.flink.table.catalog.kafka.factories.KafkaCatalogFactoryOptions;
+import org.apache.flink.table.catalog.kafka.factories.KafkaAdminClientFactory;
+import org.apache.flink.table.catalog.kafka.factories.SchemaRegistryClientFactory;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -26,12 +26,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.flink.table.catalog.confluent.CatalogTestUtil.*;
+import static org.apache.flink.table.catalog.kafka.CatalogTestUtil.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 
-public class ConfluentSchemaRegistryCatalogIntegrationTest {
+public class KafkaCatalogIntegrationTest {
 
     private static EmbeddedKafka$ kafkaOps;
     private static EmbeddedKafkaConfigImpl kafkaConfig;
@@ -56,8 +56,6 @@ public class ConfluentSchemaRegistryCatalogIntegrationTest {
         kafkaOps.createCustomTopic(table1,new HashMap<>(),2,1, kafkaConfig);
         kafkaOps.createCustomTopic(table2,new HashMap<>(),2,1, kafkaConfig);
         kafkaOps.createCustomTopic(table2_target,new HashMap<>(),2,1, kafkaConfig);
-//        kafkaOps.publishToKafka(table1,table1Message.,);
-//        String a = kafkaOps.consumeFirstStringMessageFrom(table2,false, Duration.fromNanos(9000000000.0D),kafkaConfig);
 
         SchemaRegistryClientFactory schemaRegistryClientFactory = new SchemaRegistryClientFactory();
         SchemaRegistryClient schemaRegistryClient = schemaRegistryClientFactory.get(EMBEDDED_SCHEMA_REGISTRY_URIS,1000,new java.util.HashMap<>());
@@ -81,10 +79,10 @@ public class ConfluentSchemaRegistryCatalogIntegrationTest {
 
         Map<String, String> properties = new java.util.HashMap<>();
         properties.put("connector", "kafka");
-        properties.put(ConfluentSchemaRegistryCatalogFactoryOptions.BOOTSTRAP_SERVERS.key(), "localhost:" + kafkaConfig.kafkaPort());
-        properties.put(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key(), String.join(", ", EMBEDDED_SCHEMA_REGISTRY_URIS));
-        // Create a Confluent Schema Registry Catalog
-        Catalog catalog = new ConfluentSchemaRegistryCatalog("kafka", properties, new KafkaAdminClientFactory());
+        properties.put(KafkaCatalogFactoryOptions.BOOTSTRAP_SERVERS.key(), "localhost:" + kafkaConfig.kafkaPort());
+        properties.put(KafkaCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key(), String.join(", ", EMBEDDED_SCHEMA_REGISTRY_URIS));
+        // Create a Kafka Catalog
+        Catalog catalog = new KafkaCatalog("kafka", properties, new KafkaAdminClientFactory());
         // Register the catalog
         tableEnv.registerCatalog(CATALOG_NAME, catalog);
 

@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.confluent.schema;
+package org.apache.flink.table.catalog.kafka.schema;
 
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.util.Preconditions;
