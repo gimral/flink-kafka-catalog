@@ -7,16 +7,22 @@ import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
+import org.apache.flink.table.catalog.confluent.factories.KafkaAdminClientFactory;
 import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.ListTopicsResult;
+import org.apache.kafka.common.KafkaFuture;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.table.catalog.confluent.CatalogTestUtil.*;
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 public class ConfluentSchemaRegistryCatalogTest {
 
@@ -33,7 +39,14 @@ public class ConfluentSchemaRegistryCatalogTest {
         properties.put("connector", "kafka");
         properties.put(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key(), String.join(", ", SCHEMA_REGISTRY_URIS));
 
-        catalog = new ConfluentSchemaRegistryCatalog(CATALOG_NAME,properties);
+        KafkaAdminClientFactory mockAdminClientFactory = mock(KafkaAdminClientFactory.class);
+        AdminClient mockAdminClient = mock(AdminClient.class);
+        ListTopicsResult mockListTopicsResult = mock(ListTopicsResult.class);
+        when(mockListTopicsResult.names()).thenReturn(KafkaFuture.completedFuture(new HashSet<>(Arrays.asList(table1,table2))));
+        when(mockAdminClient.listTopics(any())).thenReturn(mockListTopicsResult);
+        when(mockAdminClientFactory.get(any())).thenReturn(mockAdminClient);
+        catalog = new ConfluentSchemaRegistryCatalog(CATALOG_NAME,properties, mockAdminClientFactory);
+        catalog.open();
     }
 
 

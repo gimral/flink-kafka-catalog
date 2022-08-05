@@ -1,28 +1,35 @@
 package org.apache.flink.table.catalog.confluent;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.flink.formats.avro.typeutils.AvroSchemaConverter;
 import org.apache.flink.streaming.connectors.kafka.table.KafkaDynamicTableFactory;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.*;
 import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
+import org.apache.flink.table.catalog.confluent.factories.KafkaAdminClientFactory;
 import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
 import org.apache.flink.table.catalog.confluent.json.JsonSchemaConverter;
+import org.apache.flink.table.catalog.confluent.schema.TopicSchema;
 import org.apache.flink.table.catalog.exceptions.*;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.factories.Factory;
 import org.apache.flink.table.types.DataType;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
+import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,25 +43,21 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
     public static final int DEFAULT_CACHE_SIZE = 1000;
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfluentSchemaRegistryCatalog.class);
-
-    private final SchemaRegistryClient schemaRegistryClient;
     private final Map<String, String> properties;
 
-    public ConfluentSchemaRegistryCatalog(String name, Map<String, String> properties) {
-        this(name, DEFAULT_DB, properties);
+    private SchemaRegistryClient schemaRegistryClient;
+    private List<String> topics;
+
+    private final KafkaAdminClientFactory kafkaAdminClientFactory;
+    public ConfluentSchemaRegistryCatalog(String name, Map<String, String> properties,KafkaAdminClientFactory kafkaAdminClientFactory) {
+        this(name, DEFAULT_DB, properties, kafkaAdminClientFactory);
     }
 
-    public ConfluentSchemaRegistryCatalog(String name, String defaultDatabase, Map<String, String> properties) {
+    public ConfluentSchemaRegistryCatalog(String name, String defaultDatabase, Map<String, String> properties,KafkaAdminClientFactory kafkaAdminClientFactory) {
         super(name, defaultDatabase);
         this.properties = properties;
+        this.kafkaAdminClientFactory = kafkaAdminClientFactory;
 
-        Map<String, String> schemaRegistryProperties = properties.entrySet().stream()
-                .filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_PREFIX))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        List<String> baseURLs = Arrays.asList(schemaRegistryProperties.get(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key())
-                .split(","));
-        SchemaRegistryClientFactory sf = new SchemaRegistryClientFactory();
-        schemaRegistryClient = sf.get(baseURLs,DEFAULT_CACHE_SIZE,schemaRegistryProperties);
         LOG.info("Created Confluent Schema Registry Catalog {}", name);
     }
 
@@ -66,6 +69,28 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
     @Override
     public void open() throws CatalogException {
 
+        Map<String, String> schemaRegistryProperties = properties.entrySet().stream()
+                .filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_PREFIX))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        List<String> baseURLs = Arrays.asList(schemaRegistryProperties.get(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key())
+                .split(","));
+        SchemaRegistryClientFactory sf = new SchemaRegistryClientFactory();
+        schemaRegistryClient = sf.get(baseURLs,DEFAULT_CACHE_SIZE,schemaRegistryProperties);
+
+        Map<String, Object> kafkaProperties = properties.entrySet().stream()
+                .filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.KAFKA_PREFIX))
+                .collect(Collectors.toMap(p -> p.getKey().substring(ConfluentSchemaRegistryCatalogFactoryOptions.KAFKA_PREFIX.length()
+                                + "properties.".length())
+                        , Map.Entry::getValue));
+        try (AdminClient client = kafkaAdminClientFactory.get(kafkaProperties)) {
+            ListTopicsOptions options = new ListTopicsOptions();
+            options.listInternal(true); // includes internal topics such as __consumer_offsets
+            ListTopicsResult topicsResult = client.listTopics(options);
+            topics = new ArrayList<>(topicsResult.names().get());
+        }
+        catch (Exception e){
+            throw new CatalogException("Could not list topics",e);
+        }
     }
 
     @Override
@@ -114,14 +139,7 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         if (!this.databaseExists(databaseName)) {
             throw new DatabaseNotExistException(getName(), databaseName);
         } else {
-            try {
-                return schemaRegistryClient.getAllSubjects().stream()
-                        .filter(name -> !name.endsWith(":key"))
-                        .distinct()
-                        .collect(Collectors.toList());
-            } catch (Exception e) {
-                throw new CatalogException("Could not list tables", e);
-            }
+            return topics;
         }
     }
 
@@ -136,31 +154,47 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         String topic = tablePath.getObjectName();
 
         try {
-            SchemaMetadata latestSchemaMetadata = schemaRegistryClient.getLatestSchemaMetadata(topic);
-            Schema schema = getTableSchema(latestSchemaMetadata);
-            if(schema == null)
-                throw new TableNotExistException(this.getName(), tablePath);
-            return CatalogTable.of(schema,"",new ArrayList<>(),
-                    getTableProperties(topic,latestSchemaMetadata.getSchemaType()));
+            TopicSchema schema = getTopicSchema(topic);
+            return CatalogTable.of(schema.getSchema(),"",new ArrayList<>(),
+                    getTableProperties(topic,schema.getSchemaType()));
         } catch (Exception e) {
             LOG.error("Error while accessing table " + tablePath + " : " + ExceptionUtils.getStackTrace(e));
             throw new TableNotExistException(this.getName(), tablePath);
         }
     }
 
+    private TopicSchema getTopicSchema(String topic) throws RestClientException, IOException {
+        try {
+            SchemaMetadata latestSchemaMetadata = schemaRegistryClient.getLatestSchemaMetadata(topic);
+            if(latestSchemaMetadata == null){
+                LOG.warn("Schema does not exist in registry.Instead will use default schema");
+                return new TopicSchema(getDefaultSchema(), TopicSchema.SchemaType.RAW);
+            }
+            return new TopicSchema(getTableSchema(latestSchemaMetadata),latestSchemaMetadata.getSchemaType());
+        } catch (Exception e) {
+            LOG.error("Error while preparing schema for " + topic + " : " + ExceptionUtils.getStackTrace(e));
+            throw e;
+        }
+    }
+
+    private Schema getDefaultSchema(){
+        DataTypes.Field[] fields = new DataTypes.Field[1];
+        fields[0] = DataTypes.FIELD("value", DataTypes.STRING());
+        return Schema.newBuilder().fromRowDataType(DataTypes.ROW(fields).notNull()).build();
+    }
+
     private Schema getTableSchema(SchemaMetadata schemaMetaData) {
         DataType dataType;
-        switch (schemaMetaData.getSchemaType()){
-            case "JSON":
+        switch (Enum.valueOf(TopicSchema.SchemaType.class,schemaMetaData.getSchemaType())){
+            case JSON:
                 Optional<ParsedSchema> parsedSchema = schemaRegistryClient.parseSchema(
                         schemaMetaData.getSchemaType(), schemaMetaData.getSchema(), schemaMetaData.getReferences());
                 if(!parsedSchema.isPresent()){
-                    LOG.error("Not able to parse the schema");
-                    return null;
+                    throw new IllegalArgumentException("Could not parse Avro schema string.");
                 }
                 dataType = JsonSchemaConverter.convertToDataType((JsonSchema)parsedSchema.get());
                 break;
-            case AvroSchema.TYPE:
+            case AVRO:
                 dataType = AvroSchemaConverter.convertToDataType(schemaMetaData.getSchema());
                 break;
             default:
@@ -170,18 +204,12 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
         return Schema.newBuilder().fromRowDataType(dataType).build();
     }
 
-    protected Map<String, String> getTableProperties(String topic, String type) {
+    protected Map<String, String> getTableProperties(String topic, TopicSchema.SchemaType type) {
         Map<String, String> props = new HashMap<>();
         props.put("connector", "kafka");
         props.put("topic", topic);
         props.put("scan.startup.mode", "latest-offset");
-
-        if("JSON".equalsIgnoreCase(type))
-            props.put("format","json");
-        else if("AVRO".equalsIgnoreCase(type))
-            props.put("format", "avro-confluent");
-        else
-            throw new NotImplementedException("Not supporting format");
+        props.put("format",type.getFormat());
 
         properties.entrySet().stream().filter(p -> p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SCAN_PREFIX)
                         || p.getKey().startsWith(ConfluentSchemaRegistryCatalogFactoryOptions.SINK_PREFIX))
@@ -195,12 +223,11 @@ public class ConfluentSchemaRegistryCatalog extends AbstractCatalog {
 
     @Override
     public boolean tableExists(ObjectPath tablePath) throws CatalogException {
-        //TODO: Cache schema results??
         //TODO: Schema Naming Strategy
         checkNotNull(tablePath, "tablePath cannot be null");
         try {
             String topic = tablePath.getObjectName();
-            return schemaRegistryClient.getAllSubjectsByPrefix(topic).contains(topic);
+            return topics.contains(topic);
         } catch (Exception e) {
             throw new CatalogException("Could not list table", e);
         }

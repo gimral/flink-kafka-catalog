@@ -12,6 +12,6 @@ public class JsonSchemaConverterTest {
     public void testComplexSchema(){
         DataType dataType = JsonSchemaConverter.convertToDataType(table2JsonSchema);
         assertNotNull(dataType);
-        assertEquals(3,dataType.getChildren().size());
+        assertEquals(5,dataType.getChildren().size());
     }
 }

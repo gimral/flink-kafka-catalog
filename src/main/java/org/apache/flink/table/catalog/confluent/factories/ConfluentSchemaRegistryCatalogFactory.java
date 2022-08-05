@@ -42,7 +42,8 @@ public class ConfluentSchemaRegistryCatalogFactory implements CatalogFactory {
 
         return new ConfluentSchemaRegistryCatalog(
                 context.getName(),
-                ((Configuration)helper.getOptions()).toMap());
+                ((Configuration)helper.getOptions()).toMap(),
+                new KafkaAdminClientFactory());
     }
 
 }

@@ -10,6 +10,7 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.confluent.factories.ConfluentSchemaRegistryCatalogFactoryOptions;
+import org.apache.flink.table.catalog.confluent.factories.KafkaAdminClientFactory;
 import org.apache.flink.table.catalog.confluent.factories.SchemaRegistryClientFactory;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.junit.AfterClass;
@@ -83,7 +84,7 @@ public class ConfluentSchemaRegistryCatalogIntegrationTest {
         properties.put(ConfluentSchemaRegistryCatalogFactoryOptions.BOOTSTRAP_SERVERS.key(), "localhost:" + kafkaConfig.kafkaPort());
         properties.put(ConfluentSchemaRegistryCatalogFactoryOptions.SCHEMA_REGISTRY_URI.key(), String.join(", ", EMBEDDED_SCHEMA_REGISTRY_URIS));
         // Create a Confluent Schema Registry Catalog
-        Catalog catalog = new ConfluentSchemaRegistryCatalog("kafka", properties);
+        Catalog catalog = new ConfluentSchemaRegistryCatalog("kafka", properties, new KafkaAdminClientFactory());
         // Register the catalog
         tableEnv.registerCatalog(CATALOG_NAME, catalog);
 
